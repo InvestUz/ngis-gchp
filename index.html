@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="utf-8">
+    <title>DXSH elektr zaryadlash loyihalari xaritasi</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=0, minimal-ui">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+        #map { position: absolute; inset: 0; z-index: 1; }
+
+        .pc-sidebar { position: fixed; left: 0; top: 0; width: 320px; height: 100%; background: #fff; z-index: 1000;
+            box-shadow: 0 0 20px rgba(0,0,0,.1); display: flex; flex-direction: column; transition: all .3s ease; }
+        .sidebar-header { padding: 20px; background: #f8f9fa; border-bottom: 1px solid #eee; }
+        .custom_logo { max-width: 200px; height: auto; display: block; margin: 0 auto; }
+        #district-info { flex: 1; padding: 20px; overflow-y: auto; }
+        .district-name { font-size: 24px; font-weight: 600; color: #2c3e50; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #3498db; }
+        .info-table { width: 100%; border-collapse: separate; border-spacing: 0 8px; }
+        .info-table td { padding: 12px; background: #f8f9fa; border-radius: 6px; }
+        .info-table td:first-child { font-weight: 500; color: #34495e; }
+        .info-table td:last-child { text-align: right; color: #2c3e50; font-weight: 600; }
+
+        #controlsPanel { position: fixed; top: 10px; right: 100px; width: 340px; background: rgba(255,255,255,.95); border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,.15); padding: 20px; z-index: 1000; backdrop-filter: blur(10px); }
+        .control-group { margin-bottom: 15px; }
+        .control-group:last-child { margin-bottom: 0; }
+        .form-select, .form-control { border-radius: 8px; padding: 12px; font-size: 14px; }
+        .search-container { display: flex; gap: 10px; }
+        .search-input { flex: 1; }
+
+        #info-sidebar { position: fixed; right: 0; top: 0; width: 450px; max-width: 100%; height: 100%; background: #fff;
+            transform: translateX(100%); transition: transform .3s ease; z-index: 1001; box-shadow: -5px 0 25px rgba(0,0,0,.1);
+            display: flex; flex-direction: column; }
+        #info-sidebar.open { transform: translateX(0); }
+        .info-header { padding: 20px; background: #f8f9fa; border-bottom: 1px solid #eee; position: relative; }
+        .close-btn { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); font-size: 24px; color: #666; cursor: pointer; }
+        .close-btn:hover { color: #dc3545; }
+        .info-content { flex: 1; overflow-y: auto; padding: 20px; }
+        .property-title { font-size: 22px; font-weight: 600; color: #2c3e50; margin-bottom: 16px; }
+        .property-details { border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.05); overflow: hidden; margin-bottom: 20px; }
+        .property-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+        .property-table th, .property-table td { padding: 12px 16px; border-bottom: 1px solid #eee; }
+        .property-table th { width: 38%; color: #666; font-weight: 500; text-align: left; }
+        .property-table td { color: #2c3e50; }
+
+        .custom-marker { background: none; border: none; }
+        .custom-marker i { color: #27ae60; font-size: 32px; filter: drop-shadow(0 3px 6px rgba(0,0,0,.3)); transition: all .3s ease; }
+        .custom-marker i:hover { transform: scale(1.2) translateY(-5px); }
+        .district-polygon { transition: all .3s ease; }
+
+        @media (max-width: 768px) {
+            .pc-sidebar { transform: translateX(-100%); width: 100%; }
+            .pc-sidebar.mobile-open { transform: translateX(0); }
+            #controlsPanel { right: 10px; left: 10px; width: auto; top: 10px; }
+            #info-sidebar { width: 100%; }
+            #mobileControls { position: fixed; bottom: 20px; right: 20px; z-index: 1000; display: flex; gap: 10px; }
+            .mobile-btn { width: 50px; height: 50px; border-radius: 50%; background: #3498db; color: #fff; border: none;
+                box-shadow: 0 4px 12px rgba(0,0,0,.2); font-size: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="pc-sidebar">
+        <div class="sidebar-header">
+            <img src="assets/logo.png" class="custom_logo" alt="InvestUz">
+        </div>
+        <div id="district-info">
+            <div class="district-name">Toshkent shahri</div>
+            <table class="info-table">
+                <tr><td>Elektr zaryadlash loyihalari</td><td id="stat-total">—</td></tr>
+                <tr><td>Tumanlar soni</td><td id="stat-districts">—</td></tr>
+            </table>
+        </div>
+    </nav>
+
+    <div id="controlsPanel">
+        <div class="control-group">
+            <select id="district-selector" class="form-select">
+                <option value="all">Toshkent shahri (barcha tumanlar)</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <div class="search-container">
+                <input type="text" id="search-input" class="form-control search-input" placeholder="Mahalla, ko'cha yoki kadastr raqami">
+                <button id="search-btn" class="btn btn-primary"><i class="fas fa-search"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <div id="map"></div>
+
+    <div id="info-sidebar">
+        <div class="info-header">
+            <h4 class="mb-0">Obyekt ma'lumoti</h4>
+            <span class="close-btn">&times;</span>
+        </div>
+        <div class="info-content"></div>
+    </div>
+
+    <div id="mobileControls" class="d-md-none">
+        <button class="mobile-btn" id="mobileMenuBtn"><i class="fas fa-bars"></i></button>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    <script src="data.js"></script>
+    <script>
+        const CENTER = [41.311, 69.279];
+        const BASE_STYLE = { color: '#fff', weight: 2, opacity: .8, fillColor: '#c7a5a5', fillOpacity: .3 };
+        const HI_STYLE = { fillColor: '#3498db', fillOpacity: .4 };
+        let map, cluster, markers = [], layers = {}, current = null;
+
+        function init() {
+            map = L.map('map', { center: CENTER, zoom: 12, minZoom: 10, maxZoom: 18, zoomControl: false });
+            const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 });
+            const labels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}');
+            const hybrid = L.layerGroup([satellite, labels]);
+            const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' });
+            L.control.layers({ 'Hybrid': hybrid, 'Satellite': satellite, 'Streets': streets }).addTo(map);
+            L.control.zoom({ position: 'topright' }).addTo(map);
+            hybrid.addTo(map);
+
+            cluster = L.layerGroup().addTo(map);
+
+            const sel = document.getElementById('district-selector');
+            for (const [key, d] of Object.entries(DISTRICTS)) {
+                const o = document.createElement('option');
+                o.value = key; o.textContent = d.name;
+                sel.appendChild(o);
+                const poly = L.polygon(d.coords, { ...BASE_STYLE, className: 'district-polygon' }).addTo(map);
+                poly.on('click', () => selectDistrict(key));
+                layers[key] = poly;
+            }
+
+            POINTS.forEach(p => {
+                const m = L.marker([p.lat, p.lng], {
+                    icon: L.divIcon({ className: 'custom-marker',
+                        html: '<i class="fas fa-map-marker-alt"></i>', iconSize: [30, 42], iconAnchor: [15, 42] })
+                });
+                m.bindTooltip(`${p.mfy} MFY`);
+                m.on('click', () => showInfo(p));
+                markers.push({ m, p });
+            });
+            render(markers);
+
+            document.getElementById('stat-total').textContent = POINTS.length;
+            document.getElementById('stat-districts').textContent = Object.keys(DISTRICTS).length;
+
+            sel.addEventListener('change', () => selectDistrict(sel.value));
+            document.getElementById('search-btn').addEventListener('click', search);
+            document.getElementById('search-input').addEventListener('keypress', e => { if (e.key === 'Enter') search(); });
+            document.getElementById('mobileMenuBtn').addEventListener('click', () => document.querySelector('.pc-sidebar').classList.toggle('mobile-open'));
+            document.querySelector('.close-btn').addEventListener('click', () => document.getElementById('info-sidebar').classList.remove('open'));
+        }
+
+        function render(list) {
+            cluster.clearLayers();
+            list.forEach(x => cluster.addLayer(x.m));
+        }
+
+        function selectDistrict(key) {
+            Object.values(layers).forEach(l => l.setStyle(BASE_STYLE));
+            document.getElementById('district-selector').value = key;
+            document.getElementById('search-input').value = '';
+            const nameEl = document.querySelector('.district-name');
+            if (key === 'all') {
+                map.setView(CENTER, 12);
+                nameEl.textContent = 'Toshkent shahri';
+                render(markers);
+                document.getElementById('stat-total').textContent = POINTS.length;
+                return;
+            }
+            layers[key].setStyle(HI_STYLE);
+            map.fitBounds(layers[key].getBounds());
+            const list = markers.filter(x => x.p.dkey === key);
+            render(list);
+            nameEl.textContent = DISTRICTS[key].name;
+            document.getElementById('stat-total').textContent = list.length;
+        }
+
+        function search() {
+            const q = document.getElementById('search-input').value.trim().toLowerCase();
+            const list = markers.filter(({ p }) => !q || [p.address, p.mfy, p.cadastre, p.district].join(' ').toLowerCase().includes(q));
+            render(list);
+            document.getElementById('stat-total').textContent = list.length;
+            if (list.length) map.fitBounds(L.featureGroup(list.map(x => x.m)).getBounds().pad(.2), { maxZoom: 16 });
+        }
+
+        function showInfo(p) {
+            document.querySelector('.info-content').innerHTML = `
+                <div class="property-title">${p.mfy} MFY — ${p.district} tumani</div>
+                <div class="property-details"><table class="property-table">
+                    <tr><th>T/r</th><td>${p.n}</td></tr>
+                    <tr><th>Tumani</th><td>${p.district}</td></tr>
+                    <tr><th>Foydalanish</th><td>${p.usage}</td></tr>
+                    <tr><th>Kadastr manzili</th><td>${p.address}</td></tr>
+                    <tr><th>Kadastr raqami</th><td>${p.cadastre}</td></tr>
+                    <tr><th>Koordinata</th><td>${p.lat}, ${p.lng}</td></tr>
+                </table></div>
+                <a class="btn btn-primary btn-lg w-100 mb-2" target="_blank" href="https://www.google.com/maps?q=${p.lat},${p.lng}">
+                    <i class="fas fa-external-link-alt me-2"></i>Google Maps'da ochish</a>`;
+            document.getElementById('info-sidebar').classList.add('open');
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
